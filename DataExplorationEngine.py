@@ -86,28 +86,27 @@ class EDA:
 		else:
 			return type(var)
 
-	def identify_variable_data_type(self, key):
-		distinct = self.getDistinct(key)
+	def identify_variable_data_type(self, key, collname):
+		distinct = self.get_distinct(key,collname)
 		value = distinct[random.randint(0,len(distinct))]
 		if value and value not in self.missing_types:
 			return self.checkDataType(value)
 		return None
 
-	def identify_variable_type(self, key):
+	def identify_variable_type(self, key, collname):
 		'''
 		Variable Identification - Continuous or Categorical
 		'''
-		
-		distinct_count = self.getDistinctCount(key)
-		total_count = self.getTotalCount(key)
+		distinct_count = self.get_distinct_count(key,collname)
+		total_count = self.get_total_count(key,collname)
 		ratio_unique = round((float(distinct_count) / total_count) * 100,2)
-		if ratio_unique > 0.5:
+		# print ratio_unique
+		if ratio_unique < 5.0:
 			return "Categorical"
 		else:
 			return "Continuous"
 
-
-	def univariate_analysis(self, key, group_key, collname, limit = False, sorting_order = "DESC", central_tendencies = True):
+	def univariate_analysis(self, key, collname, limit = False, sorting_order = "DESC", central_tendencies = True):
 		''' 
 		Variable Analysis - Univariate 
 
@@ -120,7 +119,6 @@ class EDA:
 		limit: Number of documents / rows to be analysed, Default is False (all documents)
 		sorting_order: Arranging the results in asending or descending order (ASEC or DESC)
 		central_tendencies: Boolean, True if you want to include mean, median and mode in the results
-
 		'''
 
 		sorter = -1
@@ -128,30 +126,32 @@ class EDA:
 			sorter = 1
 
 		if central_tendencies:
-			pipe = [{'$group' : {'_id' : '$'+key, 'freq' : {'$sum':'$'+group_key}, 'mean':{'$avg':'$'+group_key}, 'min':{'$min':'$'+group_key}, 'max':{'$max':'$'+group_key}}}, 
-					{'$sort':{'freq':sorter}}]
+			pipe = [{'$group' : {'_id' : key, 'sum' : {'$sum':'$'+key}, 'mean':{'$avg':'$'+key},\
+					'min':{'$min':'$'+key}, 'max':{'$max':'$'+key}}},{'$sort':{'sum':sorter}}]
 		else:
-			pipe = [{'$group' : {'_id' : '$'+key, 'freq' : {'$sum':'$'+group_key}}},
-					{'$sort':{'freq':sorter}}]
-
+			pipe = [{'$group' : {'_id' : '$'+key, 'freq' : {'$sum':1}}},
+					{'$sort':{'sum':sorter}}]
 		if limit:
 			pipe.append({'$limit':limit})
+
 		res = db[collname].aggregate(pipe)
 		res = self.cursor_to_list(res)
-		return res 
+		# ret = { key : res[0]}
+		# print ret
+		# print res
+		return res
 
-	def get_distinct(self, key):
+	def get_distinct(self, key, collname):
 		return db[collname].distinct(key)
 
-	def get_distinct_count(self, key):
-		return len(self.getDistinct(key))
+	def get_distinct_count(self, key, collname):
+		return len(self.get_distinct(key,collname))
 
-	def get_total_count(self, key):
+	def get_total_count(self, key, collname):
 		return db[collname].find().count()
 
 	def cursor_to_list(self, cursor):
 		return 	[_ for _ in cursor]
-
 
 	''' Get Missing Count '''
 	def getMissingCount(self, key, missing_type):
@@ -164,11 +164,86 @@ class EDA:
 			return db[collname].find({key:missing_type}).count()
 
 	# Complete This Function
-	# def getOutliers(self, key, threshold):
-		# distincts = self.getDistinct(key)
+	def get_outliers(self, key, collname, thresholds = [0.05,0.95]):
+		key_docs = self.get_all_values(key,collname)
+		q1 = self.get_pth_quantile(key_docs,thresholds[0])
+		q2 = self.get_pth_quantile(key_docs,thresholds[1])
+		std_dev_away = self.get_std_dev_away(key,collname,key_docs)
+		print q1,q2,key_docs
+		if (any(not((q1 < val) and (val < q2)) for val in key_docs)) and std_dev_away:
+			return True
+		return False
+	
+	def get_pth_quantile(self, x, p):
+		p_index = int(p * len(x))
+		return sorted(x)[p_index]
+	
+	def get_std_dev_away(self, key, collname, datapoints):
+		std_dev = self.get_std_dev(key,collname)
+		mean = self.get_mean(key,collname)
+		boundary = mean + 3 * abs(std_dev)
+		if all((point <= boundary for point in datapoints)):
+			return False
+		return True
 
+	def get_all_values(self, key, collname):
+		'''
+			get all values of a column
+			
+			params:
+			key : column name
+			collname : collection name
+		'''
+		docs = self.cursor_to_list(Get().get_documents(collname))
+		docs = [doc[key] for doc in docs]
+		return docs
 
-	def bivariate_analysis(self, key1, key2, group_key, collname, limit = False, sorting_order = "DESC"):
+	def delete_missing_values(self, collname):
+		'''
+			delete all the entries with the missing values
+		'''
+		docs = self.cursor_to_list(Get().get_documents(collname))
+		for doc in docs:
+			for key,value in doc.iteritems():
+				print key,value
+				if doc[key] == '':
+					print 'Deleting',doc['_id']
+					db[collname].remove({'_id':doc['_id']})
+	
+
+	def get_mean(self, key, collname):
+		list_dict = self.get_all_values(key,collname)
+		pipe = [{'$group' : {'_id' : key, 'mean':{'$avg':'$'+key}}}]
+		mean = db[collname].aggregate(pipe)
+		mean = self.cursor_to_list(mean)
+		mean = mean[0]['mean']
+		print 'mean',mean
+		return mean
+
+	def de_mean(self, key, collname):
+		'''
+			function to return the difference of list values and their mean
+		'''
+		list_dict = self.get_all_values(key,collname)
+		mean = self.get_mean(key,collname)
+		# print [each for each in list_dict]
+		return [(each-mean) for each in list_dict]
+
+	def dot(self, list1, list2):
+		'''
+			dot product of two vectors
+		'''
+		return sum([ u*v for u,v in zip(list1,list2)])
+
+	def get_std_dev(self, key, collname):
+		'''
+			function to return  the standard deviation for a key
+		'''
+		pipe = [{'$group':{'_id' :key, 'keyStdDev': { '$stdDevSamp': '$'+key }}}]
+		std_dev=self.cursor_to_list(db[collname].aggregate(pipe))[0]['keyStdDev']
+		return std_dev
+	
+	def bivariate_analysis(self, key1, key2, collname, limit = False, sorting_order = "DESC"):
 		''' 
 		Variable Analysis - BiVariate 
 
@@ -181,18 +256,33 @@ class EDA:
 		limit: Number of documents / rows to be analysed, Default is False (all documents)
 		sorting_order: Arranging the results in asending or descending order (ASEC or DESC)
 		'''
-
-		sorter = -1
+		type_key1 = self.identify_variable_type(key1,collname)
+		type_key2 = self.identify_variable_type(key2,collname)
+		if type_key1 == 'Continuous' and type_key2 == 'Continuous':
+			std_dev_key1=self.get_std_dev(key1,collname)
+			std_dev_key2=self.get_std_dev(key2,collname)
+			freq=db[collname].find().count()
+			cov_key1_key2=self.dot(self.de_mean(key1,collname),self.de_mean(key2,collname))/(freq-1)
+			return cov_key1_key2/(std_dev_key1)/(std_dev_key2)
+		elif key1 == 'Categorical' and key2 == 'Categorical':
+			pass
+		else:
+			pass
+ 		sorter = -1
 		if sorting_order != "DESC":
 			sorter = 1
 
-		pipe = [{'$group' : {'_id' : {'key1':'$'+key1,'key2':'$'+key2}, 'freq' : {'$sum':'$'+group_key}, 'mean':{'$avg':'$'+group_key}, 'min':{'$min':'$'+group_key}, 'max':{'$max':'$'+group_key} }}, 
-				{'$sort':{'freq':sorter}}]
-		if limit:
-			pipe.append({'$limit':limit})
+		# pipe = [{'$group' : {'_id' : {'key1':'$'+key1,'key2':'$'+key2}, 'sum' : {'$sum':'$'+group_key}, 'mean':{'$avg':'$'+group_key}, 'min':{'$min':'$'+group_key}, 'max':{'$max':'$'+group_key} }}, 
+		# 		{'$sort':{'sum':sorter}}]
+
+		# pipe = [{'$group' : {'_id' : '$'+group_key, ''}}]
+		# if limit:
+		# 	pipe.append({'$limit':limit})
 	
-		res = db[collname].aggregate(pipe)
-		res = self.cursor_to_list(res)
+		# res = db[collname].aggregate(pipe)
+		# res = self.cursor_to_list(res)
+		res = ''
+		# print res
 		return res 
 
 	def createBins(self, listofdicts, key, window_size, scaler):
@@ -224,8 +314,6 @@ class EDA:
 		binslist = [bins[each] for each in bins]
 		sortedbins = sorted(binslist, key=lambda k: k['bucket_name']) 
 		return sortedbins
-
-
 
 	def createBinsBiVariate(self, listofdicts, key1, window_size1, scaler1, key2, window_size2, scaler2):
 		bins = {}
@@ -317,9 +405,9 @@ class Visualize:
 		print key + "\tFreq\tMin\tMax\tMean"
 		for each in listofdicts:
 			if "min" in each:
-				print str(each['_id']) +"\t"+ str(each['freq']) + "\t" + str(each['min'])+ "\t" + str(each['max'])+ "\t" + str(each['mean'])
+				print str(each['_id']) +"\t"+ str(each['sum']) + "\t" + str(each['min'])+ "\t" + str(each['max'])+ "\t" + str(each['mean'])
 			else:
-				print str(each['_id']) +"\t"+ str(each['freq'])
+				print str(each['_id']) +"\t"+ str(each['sum'])
 
 
 	def createBiTable(self, listofdicts, key1, key2):
@@ -328,7 +416,7 @@ class Visualize:
 			if "key1" not in each['_id'] or "key2" not in each['_id']:
 				continue
 			
-			print str(each['_id']['key1']) +"\t"+ str(each['_id']['key2']) +"\t"+ str(each['freq']) + "\t" + str(each['min'])+ "\t" + str(each['max'])+ "\t" + str(each['mean'])
+			print str(each['_id']['key1']) +"\t"+ str(each['_id']['key2']) +"\t"+ str(each['sum']) + "\t" + str(each['min'])+ "\t" + str(each['max'])+ "\t" + str(each['mean'])
 
 
 	def printBinsTable(self, bins, key, window_size):
@@ -381,7 +469,7 @@ get = Get()
 eda = EDA()
 vis = Visualize()
 
-# print eda.identifyVariableType('grade')
+# print eda.identify_variable_type('PetalWidth','irisdata')
 # print eda.Univariate('annual_inc')
 
 # window_size = 50
