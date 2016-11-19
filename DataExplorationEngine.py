@@ -243,6 +243,24 @@ class EDA:
 		std_dev=self.cursor_to_list(db[collname].aggregate(pipe))[0]['keyStdDev']
 		return std_dev
 	
+	def get_ANOVA(self, key1, key2, collname):
+		'''
+			function to return bivariate analysis of variance for one continuous variable and other categorical  
+			variable with atleast two groups
+
+			key1: Continuous variable
+			key2: Categorical variable
+		'''
+		pipe = [{'$group':{'_id':'$' + key2, 'keyStdDev': { '$stdDevSamp': '$' + key1 }}}]
+		std_dev=self.cursor_to_list(db[collname].aggregate(pipe))
+		print std_dev
+
+		pipe = [{'$group':{'_id':'$' + key2, 'mean': { '$avg': '$' + key1 }}}]
+		mean=self.cursor_to_list(db[collname].aggregate(pipe))
+		print mean
+
+		return std_dev
+
 	def bivariate_analysis(self, key1, key2, collname, limit = False, sorting_order = "DESC"):
 		''' 
 		Variable Analysis - BiVariate 
@@ -264,10 +282,12 @@ class EDA:
 			freq=db[collname].find().count()
 			cov_key1_key2=self.dot(self.de_mean(key1,collname),self.de_mean(key2,collname))/(freq-1)
 			return cov_key1_key2/(std_dev_key1)/(std_dev_key2)
-		elif key1 == 'Categorical' and key2 == 'Categorical':
+		elif type_key1 == 'Categorical' and type_key2 == 'Categorical':
 			pass
-		else:
-			pass
+		elif type_key1 == 'Continuous' and type_key2 == 'Categorical':
+			return self.get_ANOVA(key1,key2,collname)
+		elif type_key1 == 'Categorical' and type_key2 == 'Continuous':
+			return self.get_ANOVA(key2,key1,collname)
  		sorter = -1
 		if sorting_order != "DESC":
 			sorter = 1

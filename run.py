@@ -20,8 +20,8 @@ key = "Species" #key can be any variable
 collname = "irisdata"
 key1 = "SepalLength"
 key2 = "SepalWidth"
-# bi = eda.bivariate_analysis(key1, key2, collname)
+bi = eda.bivariate_analysis(key2, key, collname)
 # print 'std_dev',eda.get_std_dev(key1,collname)
 # print 'outlier detection',eda.get_outliers(key1,collname)
 # vis.createBiTable(bi, key1, key2)
-eda.delete_missing_values('irisdata')
+# eda.delete_missing_values('irisdata')
