@@ -42,12 +42,16 @@ class Add:
 					doc = {}
 					for j,value in enumerate(row):
 						key = headers[j].strip()
-						val = value.strip()
+						val = value.strip() 
 						if key in datatypes['floats']:
 							doc[key] = float(val)
 						else:
 							doc[key] = val
-					self.add_json(doc, collname) 
+						
+					self.add_json(doc, collname)
+					
+
+
 
 				# Print progress
 				if counter % 100 == 0:
@@ -165,14 +169,15 @@ class EDA:
 
 	# Complete This Function
 	def get_outliers(self, key, collname, thresholds = [0.05,0.95]):
+		flag = False
 		key_docs = self.get_all_values(key,collname)
 		q1 = self.get_pth_quantile(key_docs,thresholds[0])
 		q2 = self.get_pth_quantile(key_docs,thresholds[1])
 		std_dev_away = self.get_std_dev_away(key,collname,key_docs)
-		print q1,q2,key_docs
+		# print q1,q2,key_docs
 		if (any(not((q1 < val) and (val < q2)) for val in key_docs)) and std_dev_away:
-			return True
-		return False
+			flag = True
+		return 'Yes' if flag else 'No'
 	
 	def get_pth_quantile(self, x, p):
 		p_index = int(p * len(x))
@@ -202,14 +207,16 @@ class EDA:
 		'''
 			delete all the entries with the missing values
 		'''
+		flag = False
 		docs = self.cursor_to_list(Get().get_documents(collname))
 		for doc in docs:
 			for key,value in doc.iteritems():
-				print key,value
 				if doc[key] == '':
-					print 'Deleting',doc['_id']
+					flag = True
+					print 'Deleting ',doc['_id']
 					db[collname].remove({'_id':doc['_id']})
-	
+		
+		return 'Yes' if flag else 'No'
 
 	def get_mean(self, key, collname):
 		list_dict = self.get_all_values(key,collname)
@@ -217,7 +224,6 @@ class EDA:
 		mean = db[collname].aggregate(pipe)
 		mean = self.cursor_to_list(mean)
 		mean = mean[0]['mean']
-		print 'mean',mean
 		return mean
 
 	def de_mean(self, key, collname):
@@ -252,14 +258,19 @@ class EDA:
 			key2: Categorical variable
 		'''
 		pipe = [{'$group':{'_id':'$' + key2, 'keyStdDev': { '$stdDevSamp': '$' + key1 }}}]
-		std_dev=self.cursor_to_list(db[collname].aggregate(pipe))
-		print std_dev
+		std_devs = self.cursor_to_list(db[collname].aggregate(pipe))
+		print 'Group','\t\t','Standard Deviation'
+		for std_dev in std_devs:
+			print std_dev['_id'],'\t\t',std_dev['keyStdDev']
+
+		print '\n'
 
 		pipe = [{'$group':{'_id':'$' + key2, 'mean': { '$avg': '$' + key1 }}}]
-		mean=self.cursor_to_list(db[collname].aggregate(pipe))
-		print mean
+		means = self.cursor_to_list(db[collname].aggregate(pipe))
+		print 'Group','\t\t','Mean'
+		for mean in means:
+			print mean['_id'],'\t\t',mean['mean']
 
-		return std_dev
 
 	def bivariate_analysis(self, key1, key2, collname, limit = False, sorting_order = "DESC"):
 		''' 
@@ -274,20 +285,37 @@ class EDA:
 		limit: Number of documents / rows to be analysed, Default is False (all documents)
 		sorting_order: Arranging the results in asending or descending order (ASEC or DESC)
 		'''
+		
 		type_key1 = self.identify_variable_type(key1,collname)
 		type_key2 = self.identify_variable_type(key2,collname)
 		if type_key1 == 'Continuous' and type_key2 == 'Continuous':
-			std_dev_key1=self.get_std_dev(key1,collname)
-			std_dev_key2=self.get_std_dev(key2,collname)
+
+			print 'Continuous and Continuous'
+			std_dev_key1 = self.get_std_dev(key1,collname)
+			std_dev_key2 = self.get_std_dev(key2,collname)
 			freq=db[collname].find().count()
-			cov_key1_key2=self.dot(self.de_mean(key1,collname),self.de_mean(key2,collname))/(freq-1)
-			return cov_key1_key2/(std_dev_key1)/(std_dev_key2)
+			cov_key1_key2 = self.dot(self.de_mean(key1,collname),self.de_mean(key2,collname))/(freq-1)
+			correlation = cov_key1_key2/(std_dev_key1)/(std_dev_key2)
+
+			if float("{0:.2f}".format(correlation)) < 0.00:
+				print key1, 'and', key2, 'are negatively correlated with',correlation
+			elif float("{0:.2f}".format(correlation)) > 0.00:
+				print key1, 'and', key2, 'are positively correlated with',correlation
+			else:
+				print key1, 'and', key2, 'are not correlated with',correlation
+
+		
 		elif type_key1 == 'Categorical' and type_key2 == 'Categorical':
 			pass
+		
 		elif type_key1 == 'Continuous' and type_key2 == 'Categorical':
+			print key1,'is Continuous and',key2,'is Categorical'
 			return self.get_ANOVA(key1,key2,collname)
+		
 		elif type_key1 == 'Categorical' and type_key2 == 'Continuous':
+			print key1,'is Categorical and',key2,'is Continuous'
 			return self.get_ANOVA(key2,key1,collname)
+ 		
  		sorter = -1
 		if sorting_order != "DESC":
 			sorter = 1
