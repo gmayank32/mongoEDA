@@ -169,6 +169,9 @@ class EDA:
 
 	# Complete This Function
 	def get_outliers(self, key, collname, thresholds = [0.05,0.95]):
+		'''
+			deleting a outlier helps in getting a correct mean
+		'''
 		flag = False
 		key_docs = self.get_all_values(key,collname)
 		q1 = self.get_pth_quantile(key_docs,thresholds[0])
@@ -253,6 +256,10 @@ class EDA:
 		'''
 			function to return bivariate analysis of variance for one continuous variable and other categorical  
 			variable with atleast two groups
+			
+			Mean of each group should be distinct and Variance of each group should be close to zero.
+			if Means are not distinct and Variances are not close to zero that means key1 is not a good characteristic on groups
+			key2(group or target variable).
 
 			key1: Continuous variable
 			key2: Categorical variable
