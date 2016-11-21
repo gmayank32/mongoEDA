@@ -1,17 +1,28 @@
 from DataExplorationEngine import add, eda, vis,Get
 
 
-DATABASE_NAME =  'IRIS'
+DATABASE_NAME = 'IRIS'
 collname = 'irisdata'
-# load data 
-# datatypes = {
-# 	'floats' : ['SepalLength','SepalWidth','PetalLength','PetalWidth']
-# }
-# add.load_csv("iris.csv", "irisdata", datatypes)
 
-key='Species'
+# load data 
+datatypes = {
+	'floats' : ['SepalLength','SepalWidth','PetalLength','PetalWidth']
+}
+add.load_csv("iris.csv", "irisdata", datatypes)
+
+group_key='Species'
 key1="SepalLength"
-key2="SepalWidth"
+key2="PetalWidth"
+
+# 2nd data set
+# key1="time"
+# key2="AirPassengers"
+# collname = 'airpassengers'
+# datatypes = {
+# 	'floats' : ['time','AirPassengers']
+# }
+# add.load_csv("AirPassengers.csv", collname, datatypes)
+
 
 # Performing EDA
 docs = eda.cursor_to_list(Get().get_documents(collname))
@@ -34,7 +45,7 @@ print '\n'
 print 'Univariate Analysis :'
 for key, value in doc.iteritems():
 	
-	if key != '_id' and eda.identify_variable_type(key, collname) == 'Continuous':
+	if key != '_id' and eda.identify_variable_type(key, collname) == 'Continuous'  and (eda.identify_variable_data_type(key, collname) == "Integer" or eda.identify_variable_data_type(key, collname) == "Double"):
 		uni = eda.univariate_analysis(key, collname)[0]
 		print 'Continuous Group =', uni['_id']
 		print 'Max =', uni['max'], 'Min =', uni['min'], 'Sum =', uni['sum'], 'Mean =', uni['mean']
@@ -49,8 +60,10 @@ print '\n'
 
 # Bivariate analysis
 print 'Bivariate Analysis :'
-bi = eda.bivariate_analysis(key2, key1, collname)
-
+# continuous and categorical
+bi = eda.bivariate_analysis(key1, group_key, collname)
+# categorical and categorical
+bi = eda.bivariate_analysis(key1, key2, collname)
 
 print '\n'
 

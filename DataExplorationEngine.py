@@ -3,6 +3,7 @@ from config import *
 import collections
 import math
 import csv
+import random
 
 db = MongoClient(HOST, PORT)[DATABASE_NAME]
 
@@ -92,9 +93,9 @@ class EDA:
 
 	def identify_variable_data_type(self, key, collname):
 		distinct = self.get_distinct(key,collname)
-		value = distinct[random.randint(0,len(distinct))]
+		value = distinct[random.randint(0,len(distinct)-1)]
 		if value and value not in self.missing_types:
-			return self.checkDataType(value)
+			return self.check_data_type(value)
 		return None
 
 	def identify_variable_type(self, key, collname):
@@ -173,12 +174,16 @@ class EDA:
 			deleting a outlier helps in getting a correct mean
 		'''
 		flag = False
-		key_docs = self.get_all_values(key,collname)
-		q1 = self.get_pth_quantile(key_docs,thresholds[0])
-		q2 = self.get_pth_quantile(key_docs,thresholds[1])
-		std_dev_away = self.get_std_dev_away(key,collname,key_docs)
-		# print q1,q2,key_docs
+		key_docs = self.get_all_values(key, collname)
+		q1 = self.get_pth_quantile(key_docs, thresholds[0])
+		q2 = self.get_pth_quantile(key_docs, thresholds[1])
+		# print q1,q2
+		std_dev_away = self.get_std_dev_away(key, collname, key_docs)
+		
 		if (any(not((q1 < val) and (val < q2)) for val in key_docs)) and std_dev_away:
+			# for val in key_docs:
+			# 	if not( q1 < val and val < q2 ) and std_dev_away:
+			# 		print val
 			flag = True
 		return 'Yes' if flag else 'No'
 	
@@ -188,8 +193,10 @@ class EDA:
 	
 	def get_std_dev_away(self, key, collname, datapoints):
 		std_dev = self.get_std_dev(key,collname)
+		#print std_dev
 		mean = self.get_mean(key,collname)
 		boundary = mean + 3 * abs(std_dev)
+		#print boundary
 		if all((point <= boundary for point in datapoints)):
 			return False
 		return True
@@ -548,7 +555,6 @@ vis = Visualize()
 # vis.createBiTable(bi, k1, k2)
 # bins = eda.createBinsBiVariate(bi, k1, window_size1, scaler1, k2, window_size2, scaler2)
 # vis.printBinsTableBi(bins, k1, k2, window_size1, window_size2)
-
 
 
 
