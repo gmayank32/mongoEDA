@@ -177,13 +177,11 @@ class EDA:
 		key_docs = self.get_all_values(key, collname)
 		q1 = self.get_pth_quantile(key_docs, thresholds[0])
 		q2 = self.get_pth_quantile(key_docs, thresholds[1])
-		# print q1,q2
 		std_dev_away = self.get_std_dev_away(key, collname, key_docs)
-		
+		# for val in key_docs:
+		# 	if not( q1 < val and val < q2 ) and std_dev_away:
+		# 		print val
 		if (any(not((q1 < val) and (val < q2)) for val in key_docs)) and std_dev_away:
-			# for val in key_docs:
-			# 	if not( q1 < val and val < q2 ) and std_dev_away:
-			# 		print val
 			flag = True
 		return 'Yes' if flag else 'No'
 	
@@ -193,10 +191,9 @@ class EDA:
 	
 	def get_std_dev_away(self, key, collname, datapoints):
 		std_dev = self.get_std_dev(key,collname)
-		#print std_dev
 		mean = self.get_mean(key,collname)
-		boundary = mean + 3 * abs(std_dev)
-		#print boundary
+		boundary = mean + 4 * abs(std_dev)
+		# print 'mean=',mean,'boundary=',boundary
 		if all((point <= boundary for point in datapoints)):
 			return False
 		return True

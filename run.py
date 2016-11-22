@@ -5,10 +5,10 @@ DATABASE_NAME = 'IRIS'
 collname = 'irisdata'
 
 # load data 
-datatypes = {
-	'floats' : ['SepalLength','SepalWidth','PetalLength','PetalWidth']
-}
-add.load_csv("iris.csv", "irisdata", datatypes)
+# datatypes = {
+# 	'floats' : ['SepalLength','SepalWidth','PetalLength','PetalWidth']
+# }
+# add.load_csv("iris.csv", "irisdata", datatypes)
 
 group_key='Species'
 key1="SepalLength"
